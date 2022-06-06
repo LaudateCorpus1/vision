@@ -17,7 +17,6 @@ from ..utils import _log_api_usage_once
 from . import functional as F
 from .functional import InterpolationMode, _interpolation_modes_from_int
 
-
 __all__ = [
     "Compose",
     "ToTensor",
@@ -298,7 +297,8 @@ class Resize(torch.nn.Module):
             :class:`torchvision.transforms.InterpolationMode`. Default is ``InterpolationMode.BILINEAR``.
             If input is Tensor, only ``InterpolationMode.NEAREST``, ``InterpolationMode.BILINEAR`` and
             ``InterpolationMode.BICUBIC`` are supported.
-            For backward compatibility integer values (e.g. ``PIL.Image.NEAREST``) are still acceptable.
+            For backward compatibility integer values (e.g. ``PIL.Image[.Resampling].NEAREST``) are still accepted,
+            but deprecated since 0.13 and will be removed in 0.15. Please use InterpolationMode enum.
         max_size (int, optional): The maximum allowed for the longer edge of
             the resized image: if the longer edge of the image is greater
             than ``max_size`` after being resized according to ``size``, then
@@ -330,8 +330,8 @@ class Resize(torch.nn.Module):
         # Backward compatibility with integer value
         if isinstance(interpolation, int):
             warnings.warn(
-                "Argument interpolation should be of type InterpolationMode instead of int. "
-                "Please, use InterpolationMode enum."
+                "Argument 'interpolation' of type int is deprecated since 0.13 and will be removed in 0.15. "
+                "Please use InterpolationMode enum."
             )
             interpolation = _interpolation_modes_from_int(interpolation)
 
@@ -755,7 +755,8 @@ class RandomPerspective(torch.nn.Module):
         interpolation (InterpolationMode): Desired interpolation enum defined by
             :class:`torchvision.transforms.InterpolationMode`. Default is ``InterpolationMode.BILINEAR``.
             If input is Tensor, only ``InterpolationMode.NEAREST``, ``InterpolationMode.BILINEAR`` are supported.
-            For backward compatibility integer values (e.g. ``PIL.Image.NEAREST``) are still acceptable.
+            For backward compatibility integer values (e.g. ``PIL.Image[.Resampling].NEAREST``) are still accepted,
+            but deprecated since 0.13 and will be removed in 0.15. Please use InterpolationMode enum.
         fill (sequence or number): Pixel fill value for the area outside the transformed
             image. Default is ``0``. If given a number, the value is used for all bands respectively.
     """
@@ -768,8 +769,8 @@ class RandomPerspective(torch.nn.Module):
         # Backward compatibility with integer value
         if isinstance(interpolation, int):
             warnings.warn(
-                "Argument interpolation should be of type InterpolationMode instead of int. "
-                "Please, use InterpolationMode enum."
+                "Argument 'interpolation' of type int is deprecated since 0.13 and will be removed in 0.15. "
+                "Please use InterpolationMode enum."
             )
             interpolation = _interpolation_modes_from_int(interpolation)
 
@@ -869,8 +870,8 @@ class RandomResizedCrop(torch.nn.Module):
             :class:`torchvision.transforms.InterpolationMode`. Default is ``InterpolationMode.BILINEAR``.
             If input is Tensor, only ``InterpolationMode.NEAREST``, ``InterpolationMode.BILINEAR`` and
             ``InterpolationMode.BICUBIC`` are supported.
-            For backward compatibility integer values (e.g. ``PIL.Image.NEAREST``) are still acceptable.
-
+            For backward compatibility integer values (e.g. ``PIL.Image[.Resampling].NEAREST``) are still accepted,
+            but deprecated since 0.13 and will be removed in 0.15. Please use InterpolationMode enum.
     """
 
     def __init__(self, size, scale=(0.08, 1.0), ratio=(3.0 / 4.0, 4.0 / 3.0), interpolation=InterpolationMode.BILINEAR):
@@ -888,8 +889,8 @@ class RandomResizedCrop(torch.nn.Module):
         # Backward compatibility with integer value
         if isinstance(interpolation, int):
             warnings.warn(
-                "Argument interpolation should be of type InterpolationMode instead of int. "
-                "Please, use InterpolationMode enum."
+                "Argument 'interpolation' of type int is deprecated since 0.13 and will be removed in 0.15. "
+                "Please use InterpolationMode enum."
             )
             interpolation = _interpolation_modes_from_int(interpolation)
 
@@ -1156,6 +1157,9 @@ class ColorJitter(torch.nn.Module):
         hue (float or tuple of float (min, max)): How much to jitter hue.
             hue_factor is chosen uniformly from [-hue, hue] or the given [min, max].
             Should have 0<= hue <= 0.5 or -0.5 <= min <= max <= 0.5.
+            To jitter hue, the pixel values of the input image has to be non-negative for conversion to HSV space;
+            thus it does not work if you normalize your image to an interval with negative values,
+            or use an interpolation that generates negative values before using this function.
     """
 
     def __init__(self, brightness=0, contrast=0, saturation=0, hue=0):
@@ -1265,7 +1269,8 @@ class RandomRotation(torch.nn.Module):
         interpolation (InterpolationMode): Desired interpolation enum defined by
             :class:`torchvision.transforms.InterpolationMode`. Default is ``InterpolationMode.NEAREST``.
             If input is Tensor, only ``InterpolationMode.NEAREST``, ``InterpolationMode.BILINEAR`` are supported.
-            For backward compatibility integer values (e.g. ``PIL.Image.NEAREST``) are still acceptable.
+            For backward compatibility integer values (e.g. ``PIL.Image[.Resampling].NEAREST``) are still accepted,
+            but deprecated since 0.13 and will be removed in 0.15. Please use InterpolationMode enum.
         expand (bool, optional): Optional expansion flag.
             If true, expands the output to make it large enough to hold the entire rotated image.
             If false or omitted, make the output image the same size as the input image.
@@ -1298,8 +1303,8 @@ class RandomRotation(torch.nn.Module):
         # Backward compatibility with integer value
         if isinstance(interpolation, int):
             warnings.warn(
-                "Argument interpolation should be of type InterpolationMode instead of int. "
-                "Please, use InterpolationMode enum."
+                "Argument 'interpolation' of type int is deprecated since 0.13 and will be removed in 0.15. "
+                "Please use InterpolationMode enum."
             )
             interpolation = _interpolation_modes_from_int(interpolation)
 
@@ -1386,7 +1391,8 @@ class RandomAffine(torch.nn.Module):
         interpolation (InterpolationMode): Desired interpolation enum defined by
             :class:`torchvision.transforms.InterpolationMode`. Default is ``InterpolationMode.NEAREST``.
             If input is Tensor, only ``InterpolationMode.NEAREST``, ``InterpolationMode.BILINEAR`` are supported.
-            For backward compatibility integer values (e.g. ``PIL.Image.NEAREST``) are still acceptable.
+            For backward compatibility integer values (e.g. ``PIL.Image[.Resampling].NEAREST``) are still accepted,
+            but deprecated since 0.13 and will be removed in 0.15. Please use InterpolationMode enum.
         fill (sequence or number): Pixel fill value for the area outside the transformed
             image. Default is ``0``. If given a number, the value is used for all bands respectively.
         fillcolor (sequence or number, optional):
@@ -1427,8 +1433,8 @@ class RandomAffine(torch.nn.Module):
         # Backward compatibility with integer value
         if isinstance(interpolation, int):
             warnings.warn(
-                "Argument interpolation should be of type InterpolationMode instead of int. "
-                "Please, use InterpolationMode enum."
+                "Argument 'interpolation' of type int is deprecated since 0.13 and will be removed in 0.15. "
+                "Please use InterpolationMode enum."
             )
             interpolation = _interpolation_modes_from_int(interpolation)
 
@@ -1725,9 +1731,7 @@ class RandomErasing(torch.nn.Module):
 
             # cast self.value to script acceptable type
             if isinstance(self.value, (int, float)):
-                value = [
-                    self.value,
-                ]
+                value = [self.value]
             elif isinstance(self.value, str):
                 value = None
             elif isinstance(self.value, tuple):

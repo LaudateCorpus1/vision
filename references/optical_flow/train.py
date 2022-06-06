@@ -9,11 +9,6 @@ import utils
 from presets import OpticalFlowPresetTrain, OpticalFlowPresetEval
 from torchvision.datasets import KittiFlow, FlyingChairs, FlyingThings3D, Sintel, HD1K
 
-try:
-    from torchvision import prototype
-except ImportError:
-    prototype = None
-
 
 def get_train_dataset(stage, dataset_root):
     if stage == "chairs":
@@ -80,7 +75,7 @@ def _evaluate(model, args, val_dataset, *, padder_mode, num_flow_updates=None, b
         sampler=sampler,
         batch_size=batch_size,
         pin_memory=True,
-        num_workers=args.num_workers,
+        num_workers=args.workers,
     )
 
     num_flow_updates = num_flow_updates or args.num_flow_updates
@@ -138,12 +133,18 @@ def _evaluate(model, args, val_dataset, *, padder_mode, num_flow_updates=None, b
 def evaluate(model, args):
     val_datasets = args.val_dataset or []
 
-    if args.prototype:
-        if args.weights:
-            weights = prototype.models.get_weight(args.weights)
-            preprocessing = weights.transforms()
-        else:
-            preprocessing = prototype.transforms.OpticalFlowEval()
+    if args.weights and args.test_only:
+        weights = torchvision.models.get_weight(args.weights)
+        trans = weights.transforms()
+
+        def preprocessing(img1, img2, flow, valid_flow_mask):
+            img1, img2 = trans(img1, img2)
+            if flow is not None and not isinstance(flow, torch.Tensor):
+                flow = torch.from_numpy(flow)
+            if valid_flow_mask is not None and not isinstance(valid_flow_mask, torch.Tensor):
+                valid_flow_mask = torch.from_numpy(valid_flow_mask)
+            return img1, img2, flow, valid_flow_mask
+
     else:
         preprocessing = OpticalFlowPresetEval()
 
@@ -201,20 +202,20 @@ def train_one_epoch(model, optimizer, scheduler, train_loader, logger, args):
 
 
 def main(args):
-    if args.prototype and prototype is None:
-        raise ImportError("The prototype module couldn't be found. Please install the latest torchvision nightly.")
-    if not args.prototype and args.weights:
-        raise ValueError("The weights parameter works only in prototype mode. Please pass the --prototype argument.")
     utils.setup_ddp(args)
+    args.test_only = args.train_dataset is None
 
     if args.distributed and args.device == "cpu":
         raise ValueError("The device must be cuda if we want to run in distributed mode using torchrun")
     device = torch.device(args.device)
 
-    if args.prototype:
-        model = prototype.models.optical_flow.__dict__[args.model](weights=args.weights)
+    if args.use_deterministic_algorithms:
+        torch.backends.cudnn.benchmark = False
+        torch.use_deterministic_algorithms(True)
     else:
-        model = torchvision.models.optical_flow.__dict__[args.model](pretrained=args.pretrained)
+        torch.backends.cudnn.benchmark = True
+
+    model = torchvision.models.optical_flow.__dict__[args.model](weights=args.weights)
 
     if args.distributed:
         model = model.to(args.local_rank)
@@ -228,7 +229,7 @@ def main(args):
         checkpoint = torch.load(args.resume, map_location="cpu")
         model_without_ddp.load_state_dict(checkpoint["model"])
 
-    if args.train_dataset is None:
+    if args.test_only:
         # Set deterministic CUDNN algorithms, since they can affect epe a fair bit.
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
@@ -274,17 +275,17 @@ def main(args):
         sampler=sampler,
         batch_size=args.batch_size,
         pin_memory=True,
-        num_workers=args.num_workers,
+        num_workers=args.workers,
     )
 
     logger = utils.MetricLogger()
 
     done = False
-    for current_epoch in range(args.start_epoch, args.epochs):
-        print(f"EPOCH {current_epoch}")
+    for epoch in range(args.start_epoch, args.epochs):
+        print(f"EPOCH {epoch}")
         if args.distributed:
             # needed on distributed mode, otherwise the data loading order would be the same for all epochs
-            sampler.set_epoch(current_epoch)
+            sampler.set_epoch(epoch)
 
         train_one_epoch(
             model=model,
@@ -296,20 +297,20 @@ def main(args):
         )
 
         # Note: we don't sync the SmoothedValues across processes, so the printed metrics are just those of rank 0
-        print(f"Epoch {current_epoch} done. ", logger)
+        print(f"Epoch {epoch} done. ", logger)
 
         if not args.distributed or args.rank == 0:
             checkpoint = {
                 "model": model_without_ddp.state_dict(),
                 "optimizer": optimizer.state_dict(),
                 "scheduler": scheduler.state_dict(),
-                "epoch": current_epoch,
+                "epoch": epoch,
                 "args": args,
             }
-            torch.save(checkpoint, Path(args.output_dir) / f"{args.name}_{current_epoch}.pth")
+            torch.save(checkpoint, Path(args.output_dir) / f"{args.name}_{epoch}.pth")
             torch.save(checkpoint, Path(args.output_dir) / f"{args.name}.pth")
 
-        if current_epoch % args.val_freq == 0 or done:
+        if epoch % args.val_freq == 0 or done:
             evaluate(model, args)
             model.train()
             if args.freeze_batch_norm:
@@ -324,16 +325,14 @@ def get_args_parser(add_help=True):
         type=str,
         help="The name of the experiment - determines the name of the files where weights are saved.",
     )
-    parser.add_argument(
-        "--output-dir", default="checkpoints", type=str, help="Output dir where checkpoints will be stored."
-    )
+    parser.add_argument("--output-dir", default=".", type=str, help="Output dir where checkpoints will be stored.")
     parser.add_argument(
         "--resume",
         type=str,
         help="A path to previously saved weights. Used to re-start training from, or evaluate a pre-saved model.",
     )
 
-    parser.add_argument("--num-workers", type=int, default=12, help="Number of workers for the data loading part.")
+    parser.add_argument("--workers", type=int, default=12, help="Number of workers for the data loading part.")
 
     parser.add_argument(
         "--train-dataset",
@@ -356,8 +355,7 @@ def get_args_parser(add_help=True):
     parser.add_argument(
         "--model", type=str, default="raft_large", help="The name of the model to use - either raft_large or raft_small"
     )
-    # TODO: resume, pretrained, and weights should be in an exclusive arg group
-    parser.add_argument("--pretrained", action="store_true", help="Whether to use pretrained weights")
+    # TODO: resume and weights should be in an exclusive arg group
 
     parser.add_argument(
         "--num_flow_updates",
@@ -376,15 +374,11 @@ def get_args_parser(add_help=True):
         required=True,
     )
 
-    # Prototype models only
-    parser.add_argument(
-        "--prototype",
-        dest="prototype",
-        help="Use prototype model builders instead those from main area",
-        action="store_true",
-    )
     parser.add_argument("--weights", default=None, type=str, help="the weights enum name to load.")
     parser.add_argument("--device", default="cuda", type=str, help="device (Use cuda or cpu, Default: cuda)")
+    parser.add_argument(
+        "--use-deterministic-algorithms", action="store_true", help="Forces the use of deterministic algorithms only."
+    )
 
     return parser
 

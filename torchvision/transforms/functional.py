@@ -120,7 +120,7 @@ def _is_numpy_image(img: Any) -> bool:
     return img.ndim in {2, 3}
 
 
-def to_tensor(pic):
+def to_tensor(pic) -> Tensor:
     """Convert a ``PIL Image`` or ``numpy.ndarray`` to tensor.
     This function does not support torchscript.
 
@@ -392,7 +392,8 @@ def resize(
             :class:`torchvision.transforms.InterpolationMode`.
             Default is ``InterpolationMode.BILINEAR``. If input is Tensor, only ``InterpolationMode.NEAREST``,
             ``InterpolationMode.BILINEAR`` and ``InterpolationMode.BICUBIC`` are supported.
-            For backward compatibility integer values (e.g. ``PIL.Image.NEAREST``) are still acceptable.
+            For backward compatibility integer values (e.g. ``PIL.Image[.Resampling].NEAREST``) are still accepted,
+            but deprecated since 0.13 and will be removed in 0.15. Please use InterpolationMode enum.
         max_size (int, optional): The maximum allowed for the longer edge of
             the resized image: if the longer edge of the image is greater
             than ``max_size`` after being resized according to ``size``, then
@@ -414,8 +415,8 @@ def resize(
     # Backward compatibility with integer value
     if isinstance(interpolation, int):
         warnings.warn(
-            "Argument interpolation should be of type InterpolationMode instead of int. "
-            "Please, use InterpolationMode enum."
+            "Argument 'interpolation' of type int is deprecated since 0.13 and will be removed in 0.15. "
+            "Please use InterpolationMode enum."
         )
         interpolation = _interpolation_modes_from_int(interpolation)
 
@@ -572,8 +573,8 @@ def resized_crop(
             :class:`torchvision.transforms.InterpolationMode`.
             Default is ``InterpolationMode.BILINEAR``. If input is Tensor, only ``InterpolationMode.NEAREST``,
             ``InterpolationMode.BILINEAR`` and ``InterpolationMode.BICUBIC`` are supported.
-            For backward compatibility integer values (e.g. ``PIL.Image.NEAREST``) are still acceptable.
-
+            For backward compatibility integer values (e.g. ``PIL.Image[.Resampling].NEAREST``) are still accepted,
+            but deprecated since 0.13 and will be removed in 0.15. Please use InterpolationMode enum.
     Returns:
         PIL Image or Tensor: Cropped image.
     """
@@ -652,7 +653,8 @@ def perspective(
         interpolation (InterpolationMode): Desired interpolation enum defined by
             :class:`torchvision.transforms.InterpolationMode`. Default is ``InterpolationMode.BILINEAR``.
             If input is Tensor, only ``InterpolationMode.NEAREST``, ``InterpolationMode.BILINEAR`` are supported.
-            For backward compatibility integer values (e.g. ``PIL.Image.NEAREST``) are still acceptable.
+            For backward compatibility integer values (e.g. ``PIL.Image[.Resampling].NEAREST``) are still accepted,
+            but deprecated since 0.13 and will be removed in 0.15. Please use InterpolationMode enum.
         fill (sequence or number, optional): Pixel fill value for the area outside the transformed
             image. If given a number, the value is used for all bands respectively.
 
@@ -671,8 +673,8 @@ def perspective(
     # Backward compatibility with integer value
     if isinstance(interpolation, int):
         warnings.warn(
-            "Argument interpolation should be of type InterpolationMode instead of int. "
-            "Please, use InterpolationMode enum."
+            "Argument 'interpolation' of type int is deprecated since 0.13 and will be removed in 0.15. "
+            "Please use InterpolationMode enum."
         )
         interpolation = _interpolation_modes_from_int(interpolation)
 
@@ -880,6 +882,9 @@ def adjust_hue(img: Tensor, hue_factor: float) -> Tensor:
             If img is torch Tensor, it is expected to be in [..., 1 or 3, H, W] format,
             where ... means it can have an arbitrary number of leading dimensions.
             If img is PIL Image mode "1", "I", "F" and modes with transparency (alpha channel) are not supported.
+            Note: the pixel values of the input image has to be non-negative for conversion to HSV space;
+            thus it does not work if you normalize your image to an interval with negative values,
+            or use an interpolation that generates negative values before using this function.
         hue_factor (float):  How much to shift the hue channel. Should be in
             [-0.5, 0.5]. 0.5 and -0.5 give complete reversal of hue channel in
             HSV space in positive and negative direction respectively.
@@ -1009,7 +1014,8 @@ def rotate(
         interpolation (InterpolationMode): Desired interpolation enum defined by
             :class:`torchvision.transforms.InterpolationMode`. Default is ``InterpolationMode.NEAREST``.
             If input is Tensor, only ``InterpolationMode.NEAREST``, ``InterpolationMode.BILINEAR`` are supported.
-            For backward compatibility integer values (e.g. ``PIL.Image.NEAREST``) are still acceptable.
+            For backward compatibility integer values (e.g. ``PIL.Image[.Resampling].NEAREST``) are still accepted,
+            but deprecated since 0.13 and will be removed in 0.15. Please use InterpolationMode enum.
         expand (bool, optional): Optional expansion flag.
             If true, expands the output image to make it large enough to hold the entire rotated image.
             If false or omitted, make the output image the same size as the input image.
@@ -1045,8 +1051,8 @@ def rotate(
     # Backward compatibility with integer value
     if isinstance(interpolation, int):
         warnings.warn(
-            "Argument interpolation should be of type InterpolationMode instead of int. "
-            "Please, use InterpolationMode enum."
+            "Argument 'interpolation' of type int is deprecated since 0.13 and will be removed in 0.15. "
+            "Please use InterpolationMode enum."
         )
         interpolation = _interpolation_modes_from_int(interpolation)
 
@@ -1102,7 +1108,8 @@ def affine(
         interpolation (InterpolationMode): Desired interpolation enum defined by
             :class:`torchvision.transforms.InterpolationMode`. Default is ``InterpolationMode.NEAREST``.
             If input is Tensor, only ``InterpolationMode.NEAREST``, ``InterpolationMode.BILINEAR`` are supported.
-            For backward compatibility integer values (e.g. ``PIL.Image.NEAREST``) are still acceptable.
+            For backward compatibility integer values (e.g. ``PIL.Image[.Resampling].NEAREST``) are still accepted,
+            but deprecated since 0.13 and will be removed in 0.15. Please use InterpolationMode enum.
         fill (sequence or number, optional): Pixel fill value for the area outside the transformed
             image. If given a number, the value is used for all bands respectively.
 
@@ -1134,8 +1141,8 @@ def affine(
     # Backward compatibility with integer value
     if isinstance(interpolation, int):
         warnings.warn(
-            "Argument interpolation should be of type InterpolationMode instead of int. "
-            "Please, use InterpolationMode enum."
+            "Argument 'interpolation' of type int is deprecated since 0.13 and will be removed in 0.15. "
+            "Please use InterpolationMode enum."
         )
         interpolation = _interpolation_modes_from_int(interpolation)
 

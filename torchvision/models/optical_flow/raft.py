@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 import torch
 import torch.nn as nn
@@ -8,8 +8,10 @@ from torch.nn.modules.batchnorm import BatchNorm2d
 from torch.nn.modules.instancenorm import InstanceNorm2d
 from torchvision.ops import Conv2dNormActivation
 
-from ..._internally_replaced_utils import load_state_dict_from_url
+from ...transforms._presets import OpticalFlow
 from ...utils import _log_api_usage_once
+from .._api import Weights, WeightsEnum
+from .._utils import handle_legacy_interface
 from ._utils import grid_sample, make_coords_grid, upsample_flow
 
 
@@ -17,13 +19,9 @@ __all__ = (
     "RAFT",
     "raft_large",
     "raft_small",
+    "Raft_Large_Weights",
+    "Raft_Small_Weights",
 )
-
-
-_MODELS_URLS = {
-    "raft_large": "https://download.pytorch.org/models/raft_large_C_T_SKHT_V2-ff5fadd5.pth",
-    "raft_small": "https://download.pytorch.org/models/raft_small_C_T_V2-01064c6d.pth",
-}
 
 
 class ResidualBlock(nn.Module):
@@ -513,10 +511,213 @@ class RAFT(nn.Module):
         return flow_predictions
 
 
+_COMMON_META = {
+    "min_size": (128, 128),
+}
+
+
+class Raft_Large_Weights(WeightsEnum):
+    """The metrics reported here are as follows.
+
+    ``epe`` is the "end-point-error" and indicates how far (in pixels) the
+    predicted flow is from its true value. This is averaged over all pixels
+    of all images. ``per_image_epe`` is similar, but the average is different:
+    the epe is first computed on each image independently, and then averaged
+    over all images. This corresponds to "Fl-epe" (sometimes written "F1-epe")
+    in the original paper, and it's only used on Kitti. ``fl-all`` is also a
+    Kitti-specific metric, defined by the author of the dataset and used for the
+    Kitti leaderboard. It corresponds to the average of pixels whose epe is
+    either <3px, or <5% of flow's 2-norm.
+    """
+
+    C_T_V1 = Weights(
+        # Weights ported from https://github.com/princeton-vl/RAFT
+        url="https://download.pytorch.org/models/raft_large_C_T_V1-22a6c225.pth",
+        transforms=OpticalFlow,
+        meta={
+            **_COMMON_META,
+            "num_params": 5257536,
+            "recipe": "https://github.com/princeton-vl/RAFT",
+            "_metrics": {
+                "Sintel-Train-Cleanpass": {"epe": 1.4411},
+                "Sintel-Train-Finalpass": {"epe": 2.7894},
+                "Kitti-Train": {"per_image_epe": 5.0172, "fl_all": 17.4506},
+            },
+            "_docs": """These weights were ported from the original paper. They
+            are trained on :class:`~torchvision.datasets.FlyingChairs` +
+            :class:`~torchvision.datasets.FlyingThings3D`.""",
+        },
+    )
+
+    C_T_V2 = Weights(
+        url="https://download.pytorch.org/models/raft_large_C_T_V2-1bb1363a.pth",
+        transforms=OpticalFlow,
+        meta={
+            **_COMMON_META,
+            "num_params": 5257536,
+            "recipe": "https://github.com/pytorch/vision/tree/main/references/optical_flow",
+            "_metrics": {
+                "Sintel-Train-Cleanpass": {"epe": 1.3822},
+                "Sintel-Train-Finalpass": {"epe": 2.7161},
+                "Kitti-Train": {"per_image_epe": 4.5118, "fl_all": 16.0679},
+            },
+            "_docs": """These weights were trained from scratch on
+            :class:`~torchvision.datasets.FlyingChairs` +
+            :class:`~torchvision.datasets.FlyingThings3D`.""",
+        },
+    )
+
+    C_T_SKHT_V1 = Weights(
+        # Weights ported from https://github.com/princeton-vl/RAFT
+        url="https://download.pytorch.org/models/raft_large_C_T_SKHT_V1-0b8c9e55.pth",
+        transforms=OpticalFlow,
+        meta={
+            **_COMMON_META,
+            "num_params": 5257536,
+            "recipe": "https://github.com/princeton-vl/RAFT",
+            "_metrics": {
+                "Sintel-Test-Cleanpass": {"epe": 1.94},
+                "Sintel-Test-Finalpass": {"epe": 3.18},
+            },
+            "_docs": """
+                These weights were ported from the original paper. They are
+                trained on :class:`~torchvision.datasets.FlyingChairs` +
+                :class:`~torchvision.datasets.FlyingThings3D` and fine-tuned on
+                Sintel. The Sintel fine-tuning step is a combination of
+                :class:`~torchvision.datasets.Sintel`,
+                :class:`~torchvision.datasets.KittiFlow`,
+                :class:`~torchvision.datasets.HD1K`, and
+                :class:`~torchvision.datasets.FlyingThings3D` (clean pass).
+            """,
+        },
+    )
+
+    C_T_SKHT_V2 = Weights(
+        url="https://download.pytorch.org/models/raft_large_C_T_SKHT_V2-ff5fadd5.pth",
+        transforms=OpticalFlow,
+        meta={
+            **_COMMON_META,
+            "num_params": 5257536,
+            "recipe": "https://github.com/pytorch/vision/tree/main/references/optical_flow",
+            "_metrics": {
+                "Sintel-Test-Cleanpass": {"epe": 1.819},
+                "Sintel-Test-Finalpass": {"epe": 3.067},
+            },
+            "_docs": """
+                These weights were trained from scratch. They are
+                pre-trained on :class:`~torchvision.datasets.FlyingChairs` +
+                :class:`~torchvision.datasets.FlyingThings3D` and then
+                fine-tuned on Sintel. The Sintel fine-tuning step is a
+                combination of :class:`~torchvision.datasets.Sintel`,
+                :class:`~torchvision.datasets.KittiFlow`,
+                :class:`~torchvision.datasets.HD1K`, and
+                :class:`~torchvision.datasets.FlyingThings3D` (clean pass).
+            """,
+        },
+    )
+
+    C_T_SKHT_K_V1 = Weights(
+        # Weights ported from https://github.com/princeton-vl/RAFT
+        url="https://download.pytorch.org/models/raft_large_C_T_SKHT_K_V1-4a6a5039.pth",
+        transforms=OpticalFlow,
+        meta={
+            **_COMMON_META,
+            "num_params": 5257536,
+            "recipe": "https://github.com/princeton-vl/RAFT",
+            "_metrics": {
+                "Kitti-Test": {"fl_all": 5.10},
+            },
+            "_docs": """
+                These weights were ported from the original paper. They are
+                pre-trained on :class:`~torchvision.datasets.FlyingChairs` +
+                :class:`~torchvision.datasets.FlyingThings3D`,
+                fine-tuned on Sintel, and then fine-tuned on
+                :class:`~torchvision.datasets.KittiFlow`. The Sintel fine-tuning
+                step was described above.
+            """,
+        },
+    )
+
+    C_T_SKHT_K_V2 = Weights(
+        url="https://download.pytorch.org/models/raft_large_C_T_SKHT_K_V2-b5c70766.pth",
+        transforms=OpticalFlow,
+        meta={
+            **_COMMON_META,
+            "num_params": 5257536,
+            "recipe": "https://github.com/pytorch/vision/tree/main/references/optical_flow",
+            "_metrics": {
+                "Kitti-Test": {"fl_all": 5.19},
+            },
+            "_docs": """
+                These weights were trained from scratch. They are
+                pre-trained on :class:`~torchvision.datasets.FlyingChairs` +
+                :class:`~torchvision.datasets.FlyingThings3D`,
+                fine-tuned on Sintel, and then fine-tuned on
+                :class:`~torchvision.datasets.KittiFlow`. The Sintel fine-tuning
+                step was described above.
+            """,
+        },
+    )
+
+    DEFAULT = C_T_SKHT_V2
+
+
+class Raft_Small_Weights(WeightsEnum):
+    """The metrics reported here are as follows.
+
+    ``epe`` is the "end-point-error" and indicates how far (in pixels) the
+    predicted flow is from its true value. This is averaged over all pixels
+    of all images. ``per_image_epe`` is similar, but the average is different:
+    the epe is first computed on each image independently, and then averaged
+    over all images. This corresponds to "Fl-epe" (sometimes written "F1-epe")
+    in the original paper, and it's only used on Kitti. ``fl-all`` is also a
+    Kitti-specific metric, defined by the author of the dataset and used for the
+    Kitti leaderboard. It corresponds to the average of pixels whose epe is
+    either <3px, or <5% of flow's 2-norm.
+    """
+
+    C_T_V1 = Weights(
+        # Weights ported from https://github.com/princeton-vl/RAFT
+        url="https://download.pytorch.org/models/raft_small_C_T_V1-ad48884c.pth",
+        transforms=OpticalFlow,
+        meta={
+            **_COMMON_META,
+            "num_params": 990162,
+            "recipe": "https://github.com/princeton-vl/RAFT",
+            "_metrics": {
+                "Sintel-Train-Cleanpass": {"epe": 2.1231},
+                "Sintel-Train-Finalpass": {"epe": 3.2790},
+                "Kitti-Train": {"per_image_epe": 7.6557, "fl_all": 25.2801},
+            },
+            "_docs": """These weights were ported from the original paper. They
+            are trained on :class:`~torchvision.datasets.FlyingChairs` +
+            :class:`~torchvision.datasets.FlyingThings3D`.""",
+        },
+    )
+    C_T_V2 = Weights(
+        url="https://download.pytorch.org/models/raft_small_C_T_V2-01064c6d.pth",
+        transforms=OpticalFlow,
+        meta={
+            **_COMMON_META,
+            "num_params": 990162,
+            "recipe": "https://github.com/pytorch/vision/tree/main/references/optical_flow",
+            "_metrics": {
+                "Sintel-Train-Cleanpass": {"epe": 1.9901},
+                "Sintel-Train-Finalpass": {"epe": 3.2831},
+                "Kitti-Train": {"per_image_epe": 7.5978, "fl_all": 25.2369},
+            },
+            "_docs": """These weights were trained from scratch on
+            :class:`~torchvision.datasets.FlyingChairs` +
+            :class:`~torchvision.datasets.FlyingThings3D`.""",
+        },
+    )
+
+    DEFAULT = C_T_V2
+
+
 def _raft(
     *,
-    arch=None,
-    pretrained=False,
+    weights=None,
     progress=False,
     # Feature encoder
     feature_encoder_layers,
@@ -590,38 +791,40 @@ def _raft(
         mask_predictor=mask_predictor,
         **kwargs,  # not really needed, all params should be consumed by now
     )
-    if pretrained:
-        state_dict = load_state_dict_from_url(_MODELS_URLS[arch], progress=progress)
-        model.load_state_dict(state_dict)
+
+    if weights is not None:
+        model.load_state_dict(weights.get_state_dict(progress=progress))
 
     return model
 
 
-def raft_large(*, pretrained=False, progress=True, **kwargs):
+@handle_legacy_interface(weights=("pretrained", Raft_Large_Weights.C_T_SKHT_V2))
+def raft_large(*, weights: Optional[Raft_Large_Weights] = None, progress=True, **kwargs) -> RAFT:
     """RAFT model from
     `RAFT: Recurrent All Pairs Field Transforms for Optical Flow <https://arxiv.org/abs/2003.12039>`_.
 
     Please see the example below for a tutorial on how to use this model.
 
     Args:
-        pretrained (bool): Whether to use weights that have been pre-trained on
-            :class:`~torchvsion.datasets.FlyingChairs` + :class:`~torchvsion.datasets.FlyingThings3D`
-            with two fine-tuning steps:
+        weights(:class:`~torchvision.models.optical_flow.Raft_Large_Weights`, optional): The
+            pretrained weights to use. See
+            :class:`~torchvision.models.optical_flow.Raft_Large_Weights`
+            below for more details, and possible values. By default, no
+            pre-trained weights are used.
+        progress (bool): If True, displays a progress bar of the download to stderr. Default is True.
+        **kwargs: parameters passed to the ``torchvision.models.optical_flow.RAFT``
+            base class. Please refer to the `source code
+            <https://github.com/pytorch/vision/blob/main/torchvision/models/optical_flow/raft.py>`_
+            for more details about this class.
 
-            - one on :class:`~torchvsion.datasets.Sintel` + :class:`~torchvsion.datasets.FlyingThings3D`
-            - one on :class:`~torchvsion.datasets.KittiFlow`.
-
-            This corresponds to the ``C+T+S/K`` strategy in the paper.
-
-        progress (bool): If True, displays a progress bar of the download to stderr.
-
-    Returns:
-        nn.Module: The model.
+    .. autoclass:: torchvision.models.optical_flow.Raft_Large_Weights
+        :members:
     """
 
+    weights = Raft_Large_Weights.verify(weights)
+
     return _raft(
-        arch="raft_large",
-        pretrained=pretrained,
+        weights=weights,
         progress=progress,
         # Feature encoder
         feature_encoder_layers=(64, 64, 96, 128, 256),
@@ -650,25 +853,32 @@ def raft_large(*, pretrained=False, progress=True, **kwargs):
     )
 
 
-def raft_small(*, pretrained=False, progress=True, **kwargs):
+@handle_legacy_interface(weights=("pretrained", Raft_Small_Weights.C_T_V2))
+def raft_small(*, weights: Optional[Raft_Small_Weights] = None, progress=True, **kwargs) -> RAFT:
     """RAFT "small" model from
-    `RAFT: Recurrent All Pairs Field Transforms for Optical Flow <https://arxiv.org/abs/2003.12039>`_.
+    `RAFT: Recurrent All Pairs Field Transforms for Optical Flow <https://arxiv.org/abs/2003.12039>`__.
 
     Please see the example below for a tutorial on how to use this model.
 
     Args:
-        pretrained (bool): Whether to use weights that have been pre-trained on
-            :class:`~torchvsion.datasets.FlyingChairs` + :class:`~torchvsion.datasets.FlyingThings3D`.
-        progress (bool): If True, displays a progress bar of the download to stderr
+        weights(:class:`~torchvision.models.optical_flow.Raft_Small_Weights`, optional): The
+            pretrained weights to use. See
+            :class:`~torchvision.models.optical_flow.Raft_Small_Weights`
+            below for more details, and possible values. By default, no
+            pre-trained weights are used.
+        progress (bool): If True, displays a progress bar of the download to stderr. Default is True.
+        **kwargs: parameters passed to the ``torchvision.models.optical_flow.RAFT``
+            base class. Please refer to the `source code
+            <https://github.com/pytorch/vision/blob/main/torchvision/models/optical_flow/raft.py>`_
+            for more details about this class.
 
-    Returns:
-        nn.Module: The model.
-
+    .. autoclass:: torchvision.models.optical_flow.Raft_Small_Weights
+        :members:
     """
+    weights = Raft_Small_Weights.verify(weights)
 
     return _raft(
-        arch="raft_small",
-        pretrained=pretrained,
+        weights=weights,
         progress=progress,
         # Feature encoder
         feature_encoder_layers=(32, 32, 64, 96, 128),
